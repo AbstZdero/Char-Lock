@@ -4,12 +4,14 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
+local HttpService = game:GetService("HttpService") -- Added for JSON saving/loading
 
 -- Variables
 local LocalPlayer = Players.LocalPlayer
 local isLocked = false
 local currentTarget = nil
 local lockDistance = 200 -- Distance to scan for enemies
+local configFileName = "CharLock_Settings.json" -- Save file name
 
 -- SETTINGS
 local prediction = 0.2 -- Default prediction amount
@@ -50,7 +52,7 @@ ToggleButton.TextColor3 = Color3.fromRGB(255, 60, 60)
 ToggleButton.TextSize = 16
 ToggleButton.Active = true
 ToggleButton.AutoButtonColor = true
-ToggleButton.ClipsDescendants = false -- Important so the box shows below
+ToggleButton.ClipsDescendants = false 
 
 ButtonCorner.CornerRadius = UDim.new(0, 12)
 ButtonCorner.Parent = ToggleButton
@@ -61,16 +63,16 @@ ButtonStroke.Color = Color3.fromRGB(255, 60, 60)
 ButtonStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
 -- ---------------------------------------------------------
--- PREDICTION BOX SETUP (New)
+-- PREDICTION BOX SETUP
 -- ---------------------------------------------------------
 
 PredBox.Name = "PredictionInput"
-PredBox.Parent = ToggleButton -- Attached to button so they move together
+PredBox.Parent = ToggleButton 
 PredBox.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-PredBox.Position = UDim2.new(0, 0, 1, 5) -- Positioned right below the button
-PredBox.Size = UDim2.new(1, 0, 0, 30) -- Matches width of button
+PredBox.Position = UDim2.new(0, 0, 1, 5) 
+PredBox.Size = UDim2.new(1, 0, 0, 30) 
 PredBox.Font = Enum.Font.GothamBold
-PredBox.Text = tostring(prediction) -- Shows current prediction
+PredBox.Text = tostring(prediction) 
 PredBox.PlaceholderText = "Enter Pred"
 PredBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 PredBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
@@ -81,8 +83,51 @@ PredCorner.Parent = PredBox
 
 PredStroke.Parent = PredBox
 PredStroke.Thickness = 1
-PredStroke.Color = Color3.fromRGB(255, 60, 60) -- Matches theme
+PredStroke.Color = Color3.fromRGB(255, 60, 60)
 PredStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+-- ---------------------------------------------------------
+-- SAVE & LOAD SETTINGS LOGIC
+-- ---------------------------------------------------------
+local function SaveSettings()
+    if writefile then
+        local data = {
+            SavedPrediction = prediction,
+            UIPosition = {
+                X_Scale = ToggleButton.Position.X.Scale,
+                X_Offset = ToggleButton.Position.X.Offset,
+                Y_Scale = ToggleButton.Position.Y.Scale,
+                Y_Offset = ToggleButton.Position.Y.Offset
+            }
+        }
+        -- Convert table to JSON string and save
+        writefile(configFileName, HttpService:JSONEncode(data))
+    end
+end
+
+local function LoadSettings()
+    if isfile and isfile(configFileName) and readfile then
+        local success, decodedData = pcall(function()
+            return HttpService:JSONDecode(readfile(configFileName))
+        end)
+        
+        if success and type(decodedData) == "table" then
+            -- Load Prediction
+            if decodedData.SavedPrediction then
+                prediction = decodedData.SavedPrediction
+                PredBox.Text = tostring(prediction)
+            end
+            -- Load UI Position
+            if decodedData.UIPosition then
+                local pos = decodedData.UIPosition
+                ToggleButton.Position = UDim2.new(pos.X_Scale, pos.X_Offset, pos.Y_Scale, pos.Y_Offset)
+            end
+        end
+    end
+end
+
+-- Call LoadSettings immediately after UI configuration
+LoadSettings()
 
 -- ---------------------------------------------------------
 -- DRAGGABLE LOGIC
@@ -110,6 +155,7 @@ local function makeDraggable(obj)
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
+                    SaveSettings() -- Save UI Position when done dragging
                 end
             end)
         end
@@ -140,6 +186,9 @@ PredBox.FocusLost:Connect(function(enterPressed)
     if inputNum then
         prediction = inputNum
         PredBox.Text = tostring(inputNum) -- Format text
+        
+        SaveSettings() -- Save new prediction value
+        
         -- Visual feedback
         PredStroke.Color = Color3.fromRGB(0, 255, 100)
         task.wait(0.5)
@@ -189,15 +238,15 @@ ToggleButton.MouseButton1Click:Connect(function()
         ToggleButton.Text = "Char Lock: ON"
         ToggleButton.TextColor3 = Color3.fromRGB(0, 170, 255)
         ButtonStroke.Color = Color3.fromRGB(0, 170, 255)
-        PredStroke.Color = Color3.fromRGB(0, 170, 255) -- Update box color too
+        PredStroke.Color = Color3.fromRGB(0, 170, 255) 
         
         setAutoRotate(false)
         currentTarget = getNearestEnemy()
     else
-        ToggleButton.Text = "Char Lock: Of"
+        ToggleButton.Text = "Char Lock: Off"
         ToggleButton.TextColor3 = Color3.fromRGB(255, 60, 60)
         ButtonStroke.Color = Color3.fromRGB(255, 60, 60)
-        PredStroke.Color = Color3.fromRGB(255, 60, 60) -- Update box color too
+        PredStroke.Color = Color3.fromRGB(255, 60, 60) 
         
         setAutoRotate(true)
         currentTarget = nil
